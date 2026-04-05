@@ -2,13 +2,6 @@
 import { NextResponse } from 'next/server';
 import { createMeetingSession } from '@/lib/cloudflare';
 import { supabase } from '@/lib/supabase';
-import * as OneSignal from 'onesignal-node';
-
-// إعداد عميل OneSignal باستخدام المتغيرات
-const oneSignalClient = new OneSignal.Client(
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!,
-  process.env.ONESIGNAL_REST_API_KEY!
-);
 
 export async function POST(request: Request) {
   try {
@@ -24,7 +17,7 @@ export async function POST(request: Request) {
       .insert([
         {
           title: title || 'اجتماع طارئ',
-          created_by: created_by, // الرقم الوظيفي أو UUID من جدول profiles
+          created_by: created_by,
           cloudflare_session_id: sessionData.sessionId,
           is_active: true
         }
@@ -37,60 +30,86 @@ export async function POST(request: Request) {
       throw new Error(`فشل في حفظ الاجتماع في قاعدة البيانات: ${dbError.message || JSON.stringify(dbError)}`);
     }
 
-    // 3. إرسال الإشعار عبر OneSignal
-    const notification: any = {
-      contents: {
-        'en': 'A new private video meeting has started!',
-        'ar': `إتصال فيديو خاص: ${title || 'انقر للرد'}`
-        // 'ar': `إتصال فيديو: ${title || 'انقر للرد'}` // Original
-      },
-      // إعدادات تجعل الإشعار يبدو كأنه اتصال
-      android_channel_id: process.env.ONESIGNAL_ANDROID_CHANNEL_ID || undefined, // لتعيين نغمة رنين طويلة
-      data: {
-        meetingId: meeting.id,
-        url: `/meeting/${meeting.id}` // الرابط الذي يفتح عند لمس الإشعار
-      }
-    };
+    // 3. إرسال الإشعار عبر OneSignal (fetch مباشر - بدون مكتبة)
+    const osAppId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
+    const osApiKey = process.env.ONESIGNAL_REST_API_KEY;
 
-    const participants = body.participants;
-    if (participants && Array.isArray(participants) && participants.length > 0) {
-      // الاعتماد فقط على include_external_user_ids لحقل الاستهداف (إزالة include_aliases لتجنب التعارض)
-      notification.include_external_user_ids = participants;
-    } else {
-      notification.included_segments = ['Subscribed Users'];
-    }
+    // تشخيص: التأكد من وجود المتغيرات
+    console.log('=== OneSignal Debug ===');
+    console.log('App ID exists:', !!osAppId);
+    console.log('API Key exists:', !!osApiKey);
+    console.log('API Key first 10 chars:', osApiKey ? osApiKey.substring(0, 10) + '...' : 'MISSING');
+    console.log('Participants from body:', body.participants);
 
     let notificationResult = null;
     let notificationError = null;
 
-    try {
-      const osResponse = await fetch('https://onesignal.com/api/v1/notifications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${process.env.ONESIGNAL_REST_API_KEY}`
-        },
-        body: JSON.stringify({
-          app_id: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID,
-          include_external_user_ids: notification.include_external_user_ids,
-          included_segments: notification.included_segments,
-          contents: notification.contents,
-          data: notification.data,
-          // android_channel_id: notification.android_channel_id // Optional: uncomment if needed
-        })
-      });
+    if (!osAppId || !osApiKey) {
+      notificationError = 'المتغيرات البيئية ONESIGNAL مفقودة على السيرفر';
+      console.error(notificationError);
+    } else {
+      // بناء جسم الإشعار
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://noortech.vercel.app';
+      const meetingUrl = `${siteUrl}/meeting/${meeting.id}`;
 
-      const responseData = await osResponse.json();
-      
-      if (!osResponse.ok || responseData.errors) {
-        throw new Error(JSON.stringify(responseData.errors || responseData));
+      const osBody: any = {
+        app_id: osAppId,
+        contents: {
+          'en': 'A new private video meeting has started!',
+          'ar': `📹 إتصال فيديو خاص: ${title || 'انقر للإنضمام'}`
+        },
+        headings: {
+          'en': 'NoorTech Meeting',
+          'ar': '🔔 اجتماع نور تيك'
+        },
+        // رابط الفتح عند النقر على الإشعار
+        url: meetingUrl,
+        web_url: meetingUrl,
+        data: {
+          meetingId: meeting.id,
+          url: `/meeting/${meeting.id}`
+        },
+        // أيقونة مخصصة
+        chrome_web_icon: `${siteUrl}/icon-dark.jpg`,
+        // إعدادات الأولوية العالية
+        priority: 10,
+        ttl: 120
+      };
+
+      const participants = body.participants;
+      if (participants && Array.isArray(participants) && participants.length > 0) {
+        osBody.include_external_user_ids = participants;
+        console.log('Targeting external_user_ids:', participants);
+      } else {
+        osBody.included_segments = ['Subscribed Users'];
+        console.log('Broadcasting to all Subscribed Users');
       }
 
-      notificationResult = responseData;
-      console.log('OneSignal Fetch Success:', notificationResult);
-    } catch (osError: any) {
-      console.error('OneSignal Fetch Error:', osError.message || osError);
-      notificationError = osError.message || osError.toString();
+      console.log('OneSignal Request Body:', JSON.stringify(osBody, null, 2));
+
+      try {
+        const osResponse = await fetch('https://onesignal.com/api/v1/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': `Basic ${osApiKey}`
+          },
+          body: JSON.stringify(osBody)
+        });
+
+        const responseData = await osResponse.json();
+        console.log('OneSignal Response Status:', osResponse.status);
+        console.log('OneSignal Response Body:', JSON.stringify(responseData, null, 2));
+
+        if (responseData.errors) {
+          notificationError = responseData.errors;
+        } else {
+          notificationResult = responseData;
+        }
+      } catch (fetchErr: any) {
+        console.error('OneSignal Fetch Exception:', fetchErr);
+        notificationError = fetchErr.message || fetchErr.toString();
+      }
     }
 
     return NextResponse.json({
@@ -98,7 +117,10 @@ export async function POST(request: Request) {
       meetingId: meeting.id,
       sessionId: sessionData.sessionId,
       token: sessionData.token,
-      notification_status: {
+      notification_debug: {
+        app_id_exists: !!osAppId,
+        api_key_exists: !!osApiKey,
+        participants_sent: body.participants || 'none',
         result: notificationResult,
         error: notificationError
       }
