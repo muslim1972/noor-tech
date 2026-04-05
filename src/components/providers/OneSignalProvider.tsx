@@ -24,35 +24,35 @@ export default function OneSignalProvider({ children }: OneSignalProviderProps) 
       OS.init({
         appId: appId,
         allowLocalhostAsSecureOrigin: true,
-        notifyButton: {
-          enable: false,
-        },
       }).then(async () => {
         console.log('OneSignal initialized successfully');
         
-        // إظهار نافذة طلب الإذن إذا لم يكن مفعلاً
-        try {
-          const isEnabled = await OS.Notifications.permission;
-          if (!isEnabled) {
-            await OS.Slidedown.promptPush({ force: true });
-            console.log('OneSignal: Slidedown prompt shown');
-          }
-        } catch (err) {
-          console.error('OneSignal: Error showing prompt', err);
-        }
-
-        // التحقق من وجود مستخدم مسجل مسبقاً في الذاكرة المحلية لربطه
+        // التحقق من وجود مستخدم مسجل مسبقاً في الذاكرة المحلية لربطه أولاً
         const storedUser = localStorage.getItem('noortech_user');
         if (storedUser) {
           try {
             const user = JSON.parse(storedUser);
             if (user.id && typeof OS.login === 'function') {
-              OS.login(user.id);
-              console.log('OneSignal: Logged in as', user.id);
+              // تسجيل الدخول بدون await لتجنب حظر الطلب اللاحق
+              OS.login(user.id).catch((err: any) => console.error('OneSignal login failed:', err));
+              console.log('OneSignal: Login request sent for', user.id);
             }
           } catch (e) {
             console.error('OneSignal: Error parsing stored user', e);
           }
+        }
+
+        // إظهار نافذة طلب الإذن
+        try {
+          const permission = await OS.Notifications.permission;
+          if (!permission) {
+            console.log('OneSignal: Attempting to show Slidedown prompt...');
+            OS.Slidedown.promptPush({ force: true });
+          } else {
+            console.log('OneSignal: Permission already granted naturally.');
+          }
+        } catch (err) {
+          console.error('OneSignal: Error with permission flow', err);
         }
       });
     };
