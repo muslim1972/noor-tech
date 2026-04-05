@@ -44,13 +44,8 @@ export default function OneSignalProvider({ children }: OneSignalProviderProps) 
 
         // إظهار نافذة طلب الإذن
         try {
-          const permission = await OS.Notifications.permission;
-          if (!permission) {
-            console.log('OneSignal: Attempting to show Slidedown prompt...');
-            OS.Slidedown.promptPush({ force: true });
-          } else {
-            console.log('OneSignal: Permission already granted naturally.');
-          }
+          console.log('OneSignal: Attempting to show Slidedown prompt...');
+          await OS.Slidedown.promptPush();
         } catch (err) {
           console.error('OneSignal: Error with permission flow', err);
         }
