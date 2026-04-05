@@ -63,7 +63,6 @@ export async function POST(request: Request) {
           'ar': '🔔 اجتماع نور تيك'
         },
         // رابط الفتح عند النقر على الإشعار
-        url: meetingUrl,
         web_url: meetingUrl,
         data: {
           meetingId: meeting.id,
