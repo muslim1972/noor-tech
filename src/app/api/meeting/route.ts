@@ -62,13 +62,35 @@ export async function POST(request: Request) {
 
     let notificationResult = null;
     let notificationError = null;
+
     try {
-      const osResponse = await oneSignalClient.createNotification(notification);
-      notificationResult = osResponse.body;
-      console.log('OneSignal Success:', notificationResult);
+      const osResponse = await fetch('https://onesignal.com/api/v1/notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${process.env.ONESIGNAL_REST_API_KEY}`
+        },
+        body: JSON.stringify({
+          app_id: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID,
+          include_external_user_ids: notification.include_external_user_ids,
+          included_segments: notification.included_segments,
+          contents: notification.contents,
+          data: notification.data,
+          // android_channel_id: notification.android_channel_id // Optional: uncomment if needed
+        })
+      });
+
+      const responseData = await osResponse.json();
+      
+      if (!osResponse.ok || responseData.errors) {
+        throw new Error(JSON.stringify(responseData.errors || responseData));
+      }
+
+      notificationResult = responseData;
+      console.log('OneSignal Fetch Success:', notificationResult);
     } catch (osError: any) {
-      console.error('OneSignal Error Details:', osError.body || osError);
-      notificationError = osError.body || osError.message || 'فشل إرسال الإشعار';
+      console.error('OneSignal Fetch Error:', osError.message || osError);
+      notificationError = osError.message || osError.toString();
     }
 
     return NextResponse.json({
