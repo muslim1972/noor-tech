@@ -1,0 +1,89 @@
+// src/app/api/meeting/route.ts
+import { NextResponse } from 'next/server';
+import { createMeetingSession } from '@/lib/cloudflare';
+import { supabase } from '@/lib/supabase';
+import * as OneSignal from 'onesignal-node';
+
+// إعداد عميل OneSignal باستخدام المتغيرات
+const oneSignalClient = new OneSignal.Client(
+  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!,
+  process.env.ONESIGNAL_REST_API_KEY!
+);
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { title, created_by } = body;
+
+    // 1. إنشاء جلسة الفيديو في Cloudflare
+    const sessionData = await createMeetingSession();
+
+    // 2. حفظ بيانات الاجتماع في Supabase
+    const { data: meeting, error: dbError } = await supabase
+      .from('meetings')
+      .insert([
+        {
+          title: title || 'اجتماع طارئ',
+          created_by: created_by, // الرقم الوظيفي أو UUID من جدول profiles
+          cloudflare_session_id: sessionData.sessionId,
+          is_active: true
+        }
+      ])
+      .select()
+      .single();
+
+    if (dbError) {
+      console.error('Database Error:', dbError);
+      throw new Error(`فشل في حفظ الاجتماع في قاعدة البيانات: ${dbError.message || JSON.stringify(dbError)}`);
+    }
+
+    // 3. إرسال الإشعار عبر OneSignal
+    const notification: any = {
+      contents: {
+        'en': 'A new private video meeting has started!',
+        'ar': `إتصال فيديو خاص: ${title || 'انقر للرد'}`
+        // 'ar': `إتصال فيديو: ${title || 'انقر للرد'}` // Original
+      },
+      // إعدادات تجعل الإشعار يبدو كأنه اتصال
+      android_channel_id: process.env.ONESIGNAL_ANDROID_CHANNEL_ID || undefined, // لتعيين نغمة رنين طويلة
+      data: {
+        meetingId: meeting.id,
+        url: `/meeting/${meeting.id}` // الرابط الذي يفتح عند لمس الإشعار
+      }
+    };
+
+    const participants = body.participants;
+    if (participants && Array.isArray(participants) && participants.length > 0) {
+      // توجيه الإشعار لهؤلاء الموظفين فقط عبر include_aliases استناداً لربط OneSignal.login
+      notification.include_aliases = {
+        external_id: participants
+      };
+      // target_channel specifies we want to send push notifications
+      notification.target_channel = 'push';
+    } else {
+      // في حالة لم يتم تحديد أشخاص، إرسال للكل كاحتياط أو لمنع الإرسال يمكننا إرجاع خطأ
+      notification.included_segments = ['Subscribed Users'];
+    }
+
+    try {
+      await oneSignalClient.createNotification(notification);
+    } catch (osError) {
+      console.error('OneSignal Error:', osError);
+      // لن نوقف العملية بسبب فشل الإشعارات مؤقتاً
+    }
+
+    return NextResponse.json({
+      success: true,
+      meetingId: meeting.id,
+      sessionId: sessionData.sessionId,
+      token: sessionData.token
+    });
+  } catch (error: any) {
+    console.error('Meeting Creation Error:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: 'حدث خطأ في إنشاء الاجتماع', 
+      details: error.message || error.toString() 
+    }, { status: 500 });
+  }
+}
