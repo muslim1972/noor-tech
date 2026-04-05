@@ -54,29 +54,35 @@ export async function POST(request: Request) {
 
     const participants = body.participants;
     if (participants && Array.isArray(participants) && participants.length > 0) {
-      // توجيه الإشعار لهؤلاء الموظفين فقط عبر include_aliases استناداً لربط OneSignal.login
-      notification.include_aliases = {
-        external_id: participants
-      };
-      // target_channel specifies we want to send push notifications
+      // توجيه الإشعار لهؤلاء الموظفين فقط (متوافق مع API v1 ومكتبة onesignal-node)
+      notification.include_external_user_ids = participants;
+      // نحتفظ بهذه تحسباً لكود v2 (include_aliases)
+      notification.include_aliases = { external_id: participants };
       notification.target_channel = 'push';
     } else {
-      // في حالة لم يتم تحديد أشخاص، إرسال للكل كاحتياط أو لمنع الإرسال يمكننا إرجاع خطأ
       notification.included_segments = ['Subscribed Users'];
     }
 
+    let notificationResult = null;
+    let notificationError = null;
     try {
-      await oneSignalClient.createNotification(notification);
-    } catch (osError) {
-      console.error('OneSignal Error:', osError);
-      // لن نوقف العملية بسبب فشل الإشعارات مؤقتاً
+      const osResponse = await oneSignalClient.createNotification(notification);
+      notificationResult = osResponse.body;
+      console.log('OneSignal Success:', notificationResult);
+    } catch (osError: any) {
+      console.error('OneSignal Error Details:', osError.body || osError);
+      notificationError = osError.body || osError.message || 'فشل إرسال الإشعار';
     }
 
     return NextResponse.json({
       success: true,
       meetingId: meeting.id,
       sessionId: sessionData.sessionId,
-      token: sessionData.token
+      token: sessionData.token,
+      notification_status: {
+        result: notificationResult,
+        error: notificationError
+      }
     });
   } catch (error: any) {
     console.error('Meeting Creation Error:', error);
