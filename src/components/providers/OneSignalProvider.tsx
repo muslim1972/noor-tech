@@ -25,11 +25,22 @@ export default function OneSignalProvider({ children }: OneSignalProviderProps) 
         appId: appId,
         allowLocalhostAsSecureOrigin: true,
         notifyButton: {
-          enable: false, // سنقوم بإظهار طلب الإذن يدوياً أو عند الحاجة
+          enable: false,
         },
-      }).then(() => {
+      }).then(async () => {
         console.log('OneSignal initialized successfully');
         
+        // إظهار نافذة طلب الإذن إذا لم يكن مفعلاً
+        try {
+          const isEnabled = await OS.Notifications.permission;
+          if (!isEnabled) {
+            await OS.Slidedown.promptPush({ force: true });
+            console.log('OneSignal: Slidedown prompt shown');
+          }
+        } catch (err) {
+          console.error('OneSignal: Error showing prompt', err);
+        }
+
         // التحقق من وجود مستخدم مسجل مسبقاً في الذاكرة المحلية لربطه
         const storedUser = localStorage.getItem('noortech_user');
         if (storedUser) {
