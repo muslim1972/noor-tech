@@ -54,11 +54,8 @@ export async function POST(request: Request) {
 
     const participants = body.participants;
     if (participants && Array.isArray(participants) && participants.length > 0) {
-      // توجيه الإشعار لهؤلاء الموظفين فقط (متوافق مع API v1 ومكتبة onesignal-node)
+      // الاعتماد فقط على include_external_user_ids لحقل الاستهداف (إزالة include_aliases لتجنب التعارض)
       notification.include_external_user_ids = participants;
-      // نحتفظ بهذه تحسباً لكود v2 (include_aliases)
-      notification.include_aliases = { external_id: participants };
-      notification.target_channel = 'push';
     } else {
       notification.included_segments = ['Subscribed Users'];
     }
