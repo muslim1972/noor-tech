@@ -75,7 +75,7 @@ export default function LoginPage() {
         <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl p-8 relative z-10">
           <div className="flex flex-col items-center justify-center space-y-4 mb-8">
             <div className="w-24 h-24 mb-2">
-              <img src="/icon-dark.png" alt="NoorTech Logo" className="w-full h-full object-contain" />
+              <img src="/icon-dark.jpg" alt="NoorTech Logo" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-3xl font-bold font-arabic text-white">NoorTech</h1>
             <p className="text-slate-400 text-sm italic font-medium">Private Video Meetings</p>

@@ -20,12 +20,12 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/icon-light.png", media: "(prefers-color-scheme: light)" },
-      { url: "/icon-dark.png", media: "(prefers-color-scheme: dark)" },
+      { url: "/icon-light.jpg", media: "(prefers-color-scheme: light)" },
+      { url: "/icon-dark.jpg", media: "(prefers-color-scheme: dark)" },
     ],
     apple: [
-      { url: "/icon-light.png", media: "(prefers-color-scheme: light)" },
-      { url: "/icon-dark.png", media: "(prefers-color-scheme: dark)" },
+      { url: "/icon-light.jpg", media: "(prefers-color-scheme: light)" },
+      { url: "/icon-dark.jpg", media: "(prefers-color-scheme: dark)" },
     ],
   },
 };
