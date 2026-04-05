@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation';
 import { useCloudflareCall } from '@/hooks/useCloudflareCall';
 import {
   Mic, MicOff, Video, VideoOff, PhoneOff,
-  Users, Shield, Loader2, WifiOff, MonitorSpeaker,
-  ChevronUp, Maximize, Minimize
+  Users, Shield, Loader2, WifiOff, UserPlus,
+  Maximize, Minimize
 } from 'lucide-react';
+import ParticipantSearchModal from '@/components/video/ParticipantSearchModal';
 
 interface MeetingRoomProps {
   meetingId: string;
@@ -151,9 +152,9 @@ export default function MeetingRoom({ meetingId }: MeetingRoomProps) {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showControls, setShowControls] = useState(true);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     localStream,
@@ -207,6 +208,32 @@ export default function MeetingRoom({ meetingId }: MeetingRoomProps) {
       setIsFullscreen(false);
     }
   }, []);
+
+  // دعوة أشخاص إضافيين أثناء الاجتماع
+  const handleInviteParticipants = useCallback(async (selectedIds: string[]) => {
+    setIsSendingInvite(true);
+    try {
+      // إرسال إشعار للمدعوين الجدد مع رابط الاجتماع الحالي
+      const res = await fetch('/api/meeting/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meetingId,
+          invitedBy: user?.fullName || 'مشارك',
+          participants: selectedIds
+        })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Invite error:', data.error);
+      }
+    } catch (err) {
+      console.error('Invite failed:', err);
+    } finally {
+      setIsSendingInvite(false);
+      setShowInviteModal(false);
+    }
+  }, [meetingId, user]);
 
   // حساب عدد المشاركين الإجمالي (أنا + الآخرين)
   const totalParticipants = useMemo(() => {
@@ -320,6 +347,16 @@ export default function MeetingRoom({ meetingId }: MeetingRoomProps) {
             </span>
           </button>
 
+          {/* زر دعوة أشخاص */}
+          <button
+            onClick={() => setShowInviteModal(true)}
+            className="meeting-controls__btn meeting-controls__btn--invite"
+            title="دعوة أشخاص"
+          >
+            <UserPlus size={22} />
+            <span className="meeting-controls__btn-label">دعوة</span>
+          </button>
+
           {/* زر إنهاء الاجتماع */}
           <button
             onClick={handleLeave}
@@ -331,6 +368,17 @@ export default function MeetingRoom({ meetingId }: MeetingRoomProps) {
           </button>
         </div>
       </footer>
+
+      {/* مودال دعوة مشاركين إضافيين */}
+      {user && (
+        <ParticipantSearchModal
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          onStartMeeting={handleInviteParticipants}
+          isStarting={isSendingInvite}
+          currentUserJobNumber={user.jobNumber}
+        />
+      )}
 
       <style jsx>{meetingStyles}</style>
     </div>
@@ -704,6 +752,17 @@ const meetingStyles = `
   .meeting-controls__btn--end:hover {
     background: linear-gradient(135deg, #ef4444, #dc2626);
     box-shadow: 0 6px 30px rgba(220, 38, 38, 0.4);
+  }
+
+  .meeting-controls__btn--invite {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .meeting-controls__btn--invite:hover {
+    background: rgba(16, 185, 129, 0.35);
+    border-color: rgba(16, 185, 129, 0.5);
   }
 
   .meeting-controls__btn-label {

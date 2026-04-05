@@ -70,9 +70,15 @@ export async function POST(request: Request) {
         },
         // أيقونة مخصصة
         chrome_web_icon: `${siteUrl}/icon-dark.jpg`,
-        // إعدادات الأولوية العالية
+        chrome_web_badge: `${siteUrl}/icon-light.jpg`,
+        // إعدادات الأولوية القصوى لظهور كبانر منسدل
         priority: 10,
-        ttl: 120
+        ttl: 120,
+        // أندرويد: إشعار عاجل يظهر أعلى الشاشة
+        android_visibility: 1,
+        android_sound: 'notification',
+        // إشعار مستمر حتى يتفاعل المستخدم
+        require_interaction: true
       };
 
       const participants = body.participants;
