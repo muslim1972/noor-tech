@@ -41,6 +41,16 @@ export default function LoginPage() {
         avatar: user.avatar_url || user.avatar
       }));
 
+      // ربط المستخدم بـ OneSignal لتلقي الإشعارات المستهدفة
+      if (typeof window !== 'undefined' && (window as any).OneSignal) {
+        try {
+          (window as any).OneSignal.login(user.id);
+          console.log('OneSignal: Logged in as', user.id);
+        } catch (e) {
+          console.error('OneSignal login error:', e);
+        }
+      }
+
       // التوجيه إلى لوحة القيادة
       router.push('/dashboard');
     } catch (err) {
@@ -64,11 +74,11 @@ export default function LoginPage() {
       >
         <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl p-8 relative z-10">
           <div className="flex flex-col items-center justify-center space-y-4 mb-8">
-            <div className="w-16 h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-500 mb-2">
-              <Video size={32} />
+            <div className="w-24 h-24 mb-2">
+              <img src="/icon-dark.png" alt="NoorTech Logo" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-3xl font-bold font-arabic text-white">NoorTech Meet</h1>
-            <p className="text-slate-400 text-sm">منصة الاجتماعات الآمنة للموظفين</p>
+            <h1 className="text-3xl font-bold font-arabic text-white">NoorTech</h1>
+            <p className="text-slate-400 text-sm italic font-medium">Private Video Meetings</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6" dir="rtl">
