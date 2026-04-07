@@ -124,13 +124,21 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
     }
   }, []);
 
-  // سحب tracks من مشارك آخر
-  const pullRemoteTracks = useCallback(async (participant: Participant) => {
+  // سحب tracks من مشارك آخر مع محاولة إعادة في حال عدم الجاهزية
+  const pullRemoteTracks = useCallback(async (participant: Participant, retryCount = 0) => {
     const pc = pcRef.current;
     const mySessionId = sessionIdRef.current;
+    
+    // إذا لم نكن جاهزين بعد، نحاول مرة أخرى بعد قليل (حالة سباق)
+    if ((!pc || !mySessionId) && retryCount < 3) {
+      console.log(`Waiting to pull ${participant.user_name}, retry: ${retryCount + 1}`);
+      setTimeout(() => pullRemoteTracks(participant, retryCount + 1), 1000);
+      return;
+    }
+
     if (!pc || !mySessionId || !participant.cloudflare_session_id) return;
 
-    // تجنب السحب المكرر
+    // تجنب السحب المكرر لنفس الجلسة
     if (pulledSessionsRef.current.has(participant.cloudflare_session_id)) return;
     pulledSessionsRef.current.add(participant.cloudflare_session_id);
 
@@ -230,6 +238,16 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
               setParticipants(prev =>
                 prev.map(p => p.user_id === updated.user_id ? updated : p)
               );
+              
+              // إذا عاد المستخدم أو تم تحديث جلسة Cloudflare الخاصة به، نقوم بالسحب
+              if (
+                updated.user_id !== userId && 
+                updated.cloudflare_session_id && 
+                !pulledSessionsRef.current.has(updated.cloudflare_session_id)
+              ) {
+                pullRemoteTracks(updated);
+              }
+
               setRemoteStreams(prev =>
                 prev.map(s =>
                   s.participantId === updated.user_id
@@ -371,7 +389,24 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
       // 9. الاشتراك بـ Realtime لمراقبة المشاركين الجدد
       subscribeToParticipants(meetingId, userId);
 
-      // 10. بدء العداد
+      // 10. نظام اللحاق بالركب (Catch-up): سحب أي شخص انضم أثناء عملية الاتصال
+      const { data: latestParticipants } = await supabase
+        .from('meeting_participants')
+        .select('*')
+        .eq('meeting_id', meetingId)
+        .neq('user_id', userId)
+        .is('left_at', null);
+      
+      if (latestParticipants) {
+        setParticipants(latestParticipants);
+        for (const p of latestParticipants) {
+          if (p.cloudflare_session_id && !pulledSessionsRef.current.has(p.cloudflare_session_id)) {
+            await pullRemoteTracks(p);
+          }
+        }
+      }
+
+      // 11. بدء العداد
       setIsConnected(true);
       setIsConnecting(false);
       startTimer();
