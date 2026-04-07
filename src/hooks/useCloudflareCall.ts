@@ -70,6 +70,7 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const realtimeChannelRef = useRef<any>(null);
   const pulledSessionsRef = useRef<Set<string>>(new Set());
+  const midToParticipantRef = useRef<Map<string, { userId: string, userName: string }>>(new Map());
 
   // تشغيل عداد المدة
   const startTimer = useCallback(() => {
@@ -152,6 +153,18 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
       const pullData = await pullRes.json();
 
       if (pullData.sdpOffer) {
+        // حفظ الـ mid المخصص لكل تراك لربطه بالمشارك لاحقاً (قبل تفعيل الـ tracks)
+        if (pullData.tracks && Array.isArray(pullData.tracks)) {
+          pullData.tracks.forEach((t: any) => {
+            if (t.mid) {
+              midToParticipantRef.current.set(t.mid, {
+                userId: participant.user_id,
+                userName: participant.user_name
+              });
+            }
+          });
+        }
+
         // Cloudflare أرسل offer جديد - نحتاج renegotiation
         await pc.setRemoteDescription(
           new RTCSessionDescription({ type: 'offer', sdp: pullData.sdpOffer })
@@ -260,25 +273,45 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
 
       // 4. معالجة الـ remote tracks
       pc.ontrack = (event) => {
-        console.log('Received remote track:', event.track.kind);
-        if (event.streams && event.streams[0]) {
-          setRemoteStreams(prev => {
-            // نتحقق هل هذا الـ stream موجود
-            const existingIdx = prev.findIndex(s => s.stream.id === event.streams[0].id);
-            if (existingIdx >= 0) return prev;
+        const mid = event.transceiver.mid;
+        if (!mid) return;
 
-            return [
-              ...prev,
-              {
-                participantId: 'remote-' + event.streams[0].id,
-                userName: 'مشارك',
-                stream: event.streams[0],
-                isAudioOn: true,
-                isVideoOn: true,
-              },
-            ];
-          });
+        const participantInfo = midToParticipantRef.current.get(mid);
+        if (!participantInfo) {
+          console.warn('Received unmapped track for mid:', mid);
+          return;
         }
+
+        const userId = participantInfo.userId;
+        const userName = participantInfo.userName;
+
+        setRemoteStreams(prev => {
+          const existing = prev.find(s => s.participantId === userId);
+          
+          if (existing) {
+            // إضافة التراك للـ stream الموجود إذا لم يكن موجوداً
+            const hasTrack = existing.stream.getTracks().some(t => t.id === event.track.id);
+            if (!hasTrack) {
+              // إنشاء ستريم جديد يحتوي على التراك الجديد والتراكات القديمة لضمان استجابة ريأكت
+              const newStream = new MediaStream([...existing.stream.getTracks(), event.track]);
+              return prev.map(s => s.participantId === userId ? { ...s, stream: newStream } : s);
+            }
+            return prev;
+          }
+
+          // تجميع التراك في stream جديد للمشارك
+          const newStream = new MediaStream([event.track]);
+          return [
+            ...prev,
+            {
+              participantId: userId,
+              userName: userName,
+              stream: newStream,
+              isAudioOn: true,
+              isVideoOn: true,
+            },
+          ];
+        });
       };
 
       // مراقبة حالة الاتصال
@@ -327,9 +360,11 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
       // 8. تسجيل المشاركين الموجودين
       if (joinData.otherParticipants && joinData.otherParticipants.length > 0) {
         setParticipants(joinData.otherParticipants);
-        // سحب tracks لكل مشارك موجود
+        // سحب tracks لكل مشارك موجود بشكل تسلسلي لضمان تزامن الـ mid
         for (const p of joinData.otherParticipants) {
-          await pullRemoteTracks(p);
+          if (p.cloudflare_session_id) {
+            await pullRemoteTracks(p);
+          }
         }
       }
 

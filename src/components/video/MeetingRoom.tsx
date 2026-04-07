@@ -429,10 +429,11 @@ const meetingStyles = `
     align-items: center;
     justify-content: space-between;
     padding: 12px 20px;
-    background: rgba(15, 23, 42, 0.8);
-    backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(12px) saturate(180%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 10;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
   }
 
   .meeting-header__right {
@@ -582,7 +583,14 @@ const meetingStyles = `
     align-items: center;
     justify-content: center;
     min-height: 0;
-    transition: border-color 0.3s, box-shadow 0.3s;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    animation: tile-entry 0.5s ease-out forwards;
+  }
+
+  @keyframes tile-entry {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
   }
 
   .meeting-tile:hover {
