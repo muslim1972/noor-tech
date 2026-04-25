@@ -71,6 +71,35 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
   const realtimeChannelRef = useRef<any>(null);
   const pulledSessionsRef = useRef<Set<string>>(new Set());
   const midToParticipantRef = useRef<Map<string, { userId: string, userName: string }>>(new Map());
+  
+  // صف لضمان معالجة الإشارات (SDP) بشكل تسلسلي لتجنب السباق
+  const signalingQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const queueSignalingTask = useCallback((task: () => Promise<void>) => {
+    signalingQueueRef.current = signalingQueueRef.current.then(async () => {
+      try {
+        await task();
+      } catch (err) {
+        console.error('Signaling task error:', err);
+      }
+    });
+  }, []);
+
+  // وظيفة لتحديد سقف للـ Bitrate
+  const applyBitrateLimit = useCallback((maxBitrate: number) => {
+    const pc = pcRef.current;
+    if (!pc) return;
+
+    pc.getSenders().forEach(sender => {
+      if (sender.track?.kind === 'video') {
+        const params = sender.getParameters();
+        if (params.encodings && params.encodings.length > 0) {
+          params.encodings[0].maxBitrate = maxBitrate;
+          sender.setParameters(params).catch(e => console.warn('Bitrate setting failed:', e));
+        }
+      }
+    });
+  }, []);
 
   // تشغيل عداد المدة
   const startTimer = useCallback(() => {
@@ -93,8 +122,9 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 426 },
+          height: { ideal: 240 },
+          frameRate: { max: 15 }, // تقليل عدد الإطارات لزيادة الاستقرار
           facingMode: 'user',
         },
         audio: {
@@ -126,76 +156,86 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
 
   // سحب tracks من مشارك آخر مع محاولة إعادة في حال عدم الجاهزية
   const pullRemoteTracks = useCallback(async (participant: Participant, retryCount = 0) => {
-    const pc = pcRef.current;
-    const mySessionId = sessionIdRef.current;
-    
-    // إذا لم نكن جاهزين بعد، نحاول مرة أخرى بعد قليل (حالة سباق)
-    if ((!pc || !mySessionId) && retryCount < 3) {
-      console.log(`Waiting to pull ${participant.user_name}, retry: ${retryCount + 1}`);
-      setTimeout(() => pullRemoteTracks(participant, retryCount + 1), 1000);
-      return;
-    }
+    // إدخال العملية في صف الانتظار لضمان التسلسل
+    queueSignalingTask(async () => {
+      const pc = pcRef.current;
+      const mySessionId = sessionIdRef.current;
+      
+      // إذا لم نكن جاهزين بعد، نحاول مرة أخرى بعد قليل (حالة سباق)
+      if ((!pc || !mySessionId) && retryCount < 3) {
+        console.log(`Waiting to pull ${participant.user_name}, retry: ${retryCount + 1}`);
+        setTimeout(() => pullRemoteTracks(participant, retryCount + 1), 1000);
+        return;
+      }
 
-    if (!pc || !mySessionId || !participant.cloudflare_session_id) return;
+      if (!pc || !mySessionId || !participant.cloudflare_session_id) return;
 
-    // تجنب السحب المكرر لنفس الجلسة
-    if (pulledSessionsRef.current.has(participant.cloudflare_session_id)) return;
-    pulledSessionsRef.current.add(participant.cloudflare_session_id);
+      // تجنب السحب المكرر لنفس الجلسة
+      if (pulledSessionsRef.current.has(participant.cloudflare_session_id)) {
+        console.log('Already pulling/pulled tracks from:', participant.user_name);
+        return;
+      }
+      
+      // نسجلها فوراً كـ "جارٍ السحب" لمنع أي طلب متزامن آخر
+      pulledSessionsRef.current.add(participant.cloudflare_session_id);
 
-    console.log('Pulling tracks from:', participant.user_name, participant.cloudflare_session_id);
+      console.log('Pulling tracks from:', participant.user_name, participant.cloudflare_session_id);
 
-    try {
-      // طلب سحب tracks من السيرفر
-      const pullRes = await fetch('/api/meeting/tracks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: mySessionId,
-          tracks: [
-            { trackName: 'video', sessionId: participant.cloudflare_session_id },
-            { trackName: 'audio', sessionId: participant.cloudflare_session_id },
-          ],
-        }),
-      });
-
-      const pullData = await pullRes.json();
-
-      if (pullData.sdpOffer) {
-        // حفظ الـ mid المخصص لكل تراك لربطه بالمشارك لاحقاً (قبل تفعيل الـ tracks)
-        if (pullData.tracks && Array.isArray(pullData.tracks)) {
-          pullData.tracks.forEach((t: any) => {
-            if (t.mid) {
-              midToParticipantRef.current.set(t.mid, {
-                userId: participant.user_id,
-                userName: participant.user_name
-              });
-            }
-          });
-        }
-
-        // Cloudflare أرسل offer جديد - نحتاج renegotiation
-        await pc.setRemoteDescription(
-          new RTCSessionDescription({ type: 'offer', sdp: pullData.sdpOffer })
-        );
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-
-        // إرسال الـ answer للسيرفر
-        await fetch('/api/meeting/tracks', {
-          method: 'PUT',
+      try {
+        // طلب سحب tracks من السيرفر
+        const pullRes = await fetch('/api/meeting/tracks', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sessionId: mySessionId,
-            sdpAnswer: answer.sdp,
+            tracks: [
+              { trackName: 'video', sessionId: participant.cloudflare_session_id },
+              { trackName: 'audio', sessionId: participant.cloudflare_session_id },
+            ],
           }),
         });
+
+        const pullData = await pullRes.json();
+
+        if (pullData.sdpOffer) {
+          // حفظ الـ mid المخصص لكل تراك لربطه بالمشارك لاحقاً (قبل تفعيل الـ tracks)
+          if (pullData.tracks && Array.isArray(pullData.tracks)) {
+            pullData.tracks.forEach((t: any) => {
+              if (t.mid) {
+                midToParticipantRef.current.set(t.mid, {
+                  userId: participant.user_id,
+                  userName: participant.user_name
+                });
+              }
+            });
+          }
+
+          // Cloudflare أرسل offer جديد - نحتاج renegotiation
+          await pc.setRemoteDescription(
+            new RTCSessionDescription({ type: 'offer', sdp: pullData.sdpOffer })
+          );
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          // إرسال الـ answer للسيرفر
+          await fetch('/api/meeting/tracks', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: mySessionId,
+              sdpAnswer: answer.sdp,
+            }),
+          });
+          
+          console.log('Tracks pulled and renegotiated for:', participant.user_name);
+        }
+      } catch (err) {
+        console.error('Pull tracks error:', err);
+        // إزالة من المسحوبة حتى يمكن إعادة المحاولة في حال الفشل الفعلي
+        pulledSessionsRef.current.delete(participant.cloudflare_session_id);
       }
-    } catch (err) {
-      console.error('Pull tracks error:', err);
-      // إزالة من المسحوبة حتى يمكن إعادة المحاولة
-      pulledSessionsRef.current.delete(participant.cloudflare_session_id);
-    }
-  }, []);
+    });
+  }, [queueSignalingTask]);
 
   // الاستماع لأحداث Supabase Realtime
   const subscribeToParticipants = useCallback((meetingId: string, userId: string) => {
@@ -210,7 +250,7 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
           filter: `meeting_id=eq.${meetingId}`,
         },
         (payload) => {
-          console.log('Realtime event:', payload.eventType, payload.new);
+          console.log(`[Realtime] ${payload.eventType} event for meeting ${meetingId}:`, payload.new);
 
           if (payload.eventType === 'INSERT') {
             const newPart = payload.new as Participant;
@@ -292,16 +332,20 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
       // 4. معالجة الـ remote tracks
       pc.ontrack = (event) => {
         const mid = event.transceiver.mid;
-        if (!mid) return;
+        if (!mid) {
+          console.warn('[WebRTC] Received track without mid');
+          return;
+        }
 
         const participantInfo = midToParticipantRef.current.get(mid);
         if (!participantInfo) {
-          console.warn('Received unmapped track for mid:', mid);
+          console.warn(`[WebRTC] Received unmapped track for mid: ${mid}. Waiting for mapping...`);
           return;
         }
 
         const userId = participantInfo.userId;
         const userName = participantInfo.userName;
+        console.log(`[WebRTC] Receiving ${event.track.kind} track for ${userName} (${userId})`);
 
         setRemoteStreams(prev => {
           const existing = prev.find(s => s.participantId === userId);
@@ -334,7 +378,7 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
 
       // مراقبة حالة الاتصال
       pc.onconnectionstatechange = () => {
-        console.log('Connection state:', pc.connectionState);
+        console.log('[WebRTC] Connection state changed:', pc.connectionState);
         if (pc.connectionState === 'connected') {
           setIsConnected(true);
           setIsConnecting(false);
@@ -373,6 +417,8 @@ export function useCloudflareCall(): UseCloudflareCallReturn {
         await pc.setRemoteDescription(
           new RTCSessionDescription({ type: 'answer', sdp: joinData.sdpAnswer })
         );
+        // تطبيق سقف البت ريت فور الاتصال
+        applyBitrateLimit(300000); // 300kbps كافية جداً لـ 240p
       }
 
       // 8. تسجيل المشاركين الموجودين
