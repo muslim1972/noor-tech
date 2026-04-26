@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "NoorTech | Private Video Meetings",
-  description: "نظام الاجتماعات المرئية الخاصة والمشفرة لموظفي شركة نور تيك",
+  description: "نظام الاجتماعات المرئية الخاصة والمشفرة لموظفي الدولة",
   manifest: "/manifest.json",
   icons: {
     icon: [
