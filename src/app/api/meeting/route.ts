@@ -47,14 +47,12 @@ export async function POST(request: Request) {
         }
       }
 
-      const participantRows = participants
-        .filter((userId: string) => userId !== created_by) // استثناء المنشئ من الإشعارات
-        .map((userId: string) => ({
-          meeting_id: meeting.id,
-          user_id: userId,
-          user_name: nameMap.get(userId) || 'مشارك',
-          is_read: false,
-        }));
+      const participantRows = participants.map((userId: string) => ({
+        meeting_id: meeting.id,
+        user_id: userId,
+        user_name: nameMap.get(userId) || 'مشارك',
+        is_read: false,
+      }));
 
       const { error: partError } = await supabase
         .from('meeting_participants')

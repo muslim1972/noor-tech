@@ -65,6 +65,7 @@ export async function POST(request: Request) {
           cloudflare_session_id: cfSessionId,
           is_audio_on: true,
           is_video_on: true,
+          is_read: true, // الشخص الذي انضم قرأ الدعوة بالفعل أو هو المنشئ
           left_at: null,
         },
         { onConflict: 'meeting_id,user_id' }
