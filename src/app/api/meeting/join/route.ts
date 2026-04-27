@@ -63,6 +63,7 @@ export async function POST(request: Request) {
           user_id: userId,
           user_name: userName || 'مشارك',
           cloudflare_session_id: cfSessionId,
+          track_ids: pushResult?.tracks || [], // حفظ معرفات التراكات ليتمكن الآخرون من سحبها
           is_audio_on: true,
           is_video_on: true,
           is_read: true, // الشخص الذي انضم قرأ الدعوة بالفعل أو هو المنشئ
