@@ -41,7 +41,7 @@ export default function NotificationsBell({ userId }: NotificationsBellProps) {
           `
           id,
           meeting_id,
-          created_at,
+          joined_at,
           is_read,
           meetings!inner (
             id,
@@ -56,7 +56,7 @@ export default function NotificationsBell({ userId }: NotificationsBellProps) {
         )
         .eq("user_id", userId)
         .eq("is_read", false)
-        .order("created_at", { ascending: false });
+        .order("joined_at", { ascending: false });
 
       if (error) {
         console.error("NotificationsBell: Error fetching:", error);
@@ -69,7 +69,7 @@ export default function NotificationsBell({ userId }: NotificationsBellProps) {
           meeting_id: item.meeting_id,
           meeting_title: item.meetings?.title || "اجتماع",
           invited_by_name: item.meetings?.profiles?.full_name || "مستخدم",
-          created_at: item.created_at,
+          created_at: item.joined_at,
           is_read: item.is_read,
         }));
         setUnreadNotifications(formatted);
