@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Video, Mic, Settings, LogOut, Plus, Users, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ParticipantSearchModal from '@/components/video/ParticipantSearchModal';
+import NotificationsBell from '@/components/notifications/NotificationsBell';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -31,7 +32,12 @@ export default function DashboardPage() {
     router.replace('/');
   };
 
-  const startMeetingWithParticipants = async (selectedIds: string[]) => {
+  /**
+   * إنشاء الاجتماع وإرسال الدعوات.
+   * يُرجع meetingId عند النجاح أو null عند الفشل.
+   * المودال يستخدم هذا الـ ID لعرض الرابط.
+   */
+  const startMeetingWithParticipants = async (selectedIds: string[]): Promise<string | null> => {
     setIsStartingVideo(true);
     try {
       const res = await fetch('/api/meeting', {
@@ -47,16 +53,19 @@ export default function DashboardPage() {
       const data = await res.json();
       
       if (data.success && data.meetingId) {
-        // يتم توجيه الموظف مباشرة إلى صفحة الاجتماع
-        router.push(`/meeting/${data.meetingId}`);
+        setIsStartingVideo(false);
+        // نُرجع meetingId ← المودال يعرض الرابط بدل التوجيه المباشر
+        return data.meetingId;
       } else {
         alert('فشل إنشاء جلسة للأسف: ' + (data.details || data.error || 'خطأ غير معروف'));
         setIsStartingVideo(false);
+        return null;
       }
     } catch (error) {
       console.error(error);
       alert('حدث خطأ في الاتصال بالسيرفر');
       setIsStartingVideo(false);
+      return null;
     }
   };
 
@@ -116,7 +125,7 @@ export default function DashboardPage() {
           >
             <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="bg-white/10 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-md">
-              {isStartingVideo ? <Loader2 className="w-7 h-7 text-white animate-spin" /> : <Video className="w-7 h-7 text-white" />}
+              {isStartingVideo ? <LoaderIcon className="w-7 h-7 text-white animate-spin" /> : <Video className="w-7 h-7 text-white" />}
             </div>
             <div>
               <h3 className="text-xl font-bold text-white mb-1">اجتماع فيديو خاص</h3>
@@ -162,6 +171,9 @@ export default function DashboardPage() {
         isStarting={isStartingVideo}
         currentUserJobNumber={user.jobNumber}
       />
+
+      {/* 🔔 جرس الإشعارات – يظهر عند وجود دعوات اجتماعات غير مقروءة */}
+      <NotificationsBell userId={user.id} />
     </div>
   );
 }
@@ -170,6 +182,6 @@ function UserIcon(props: any) {
   return <Users {...props} />;
 }
 
-function Loader2(props: any) {
+function LoaderIcon(props: any) {
   return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>;
 }

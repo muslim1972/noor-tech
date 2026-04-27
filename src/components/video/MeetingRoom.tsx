@@ -210,7 +210,7 @@ export default function MeetingRoom({ meetingId }: MeetingRoomProps) {
   }, []);
 
   // دعوة أشخاص إضافيين أثناء الاجتماع
-  const handleInviteParticipants = useCallback(async (selectedIds: string[]) => {
+  const handleInviteParticipants = useCallback(async (selectedIds: string[]): Promise<string | null> => {
     setIsSendingInvite(true);
     try {
       // إرسال إشعار للمدعوين الجدد مع رابط الاجتماع الحالي
@@ -233,6 +233,8 @@ export default function MeetingRoom({ meetingId }: MeetingRoomProps) {
       setIsSendingInvite(false);
       setShowInviteModal(false);
     }
+    // في سياق MeetingRoom الاجتماع موجود بالفعل، لا نحتاج إرجاع meetingId
+    return null;
   }, [meetingId, user]);
 
   // حساب عدد المشاركين الإجمالي (أنا + الآخرين)

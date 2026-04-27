@@ -30,6 +30,42 @@ export async function POST(request: Request) {
       throw new Error(`فشل في حفظ الاجتماع في قاعدة البيانات: ${dbError.message || JSON.stringify(dbError)}`);
     }
 
+    // 2.5 حفظ المشاركين المدعوين في meeting_participants مع is_read = false
+    // هذا يُحفّز Supabase Realtime → يظهر الجرس فوراً عند المدعوين
+    const participants = body.participants;
+    if (participants && Array.isArray(participants) && participants.length > 0) {
+      // جلب أسماء المشاركين من profiles
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', participants);
+
+      const nameMap = new Map<string, string>();
+      if (profilesData) {
+        for (const p of profilesData) {
+          nameMap.set(p.id, p.full_name);
+        }
+      }
+
+      const participantRows = participants.map((userId: string) => ({
+        meeting_id: meeting.id,
+        user_id: userId,
+        user_name: nameMap.get(userId) || 'مشارك',
+        is_read: false,
+      }));
+
+      const { error: partError } = await supabase
+        .from('meeting_participants')
+        .upsert(participantRows, { onConflict: 'meeting_id,user_id' });
+
+      if (partError) {
+        console.error('Error saving participants:', partError);
+        // لا نوقف العملية - الاجتماع تم إنشاؤه بنجاح
+      } else {
+        console.log(`Saved ${participantRows.length} participants with is_read=false`);
+      }
+    }
+
     // 3. إرسال الإشعار عبر OneSignal (fetch مباشر - بدون مكتبة)
     const osAppId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
     const osApiKey = process.env.ONESIGNAL_REST_API_KEY;
