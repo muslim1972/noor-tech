@@ -159,24 +159,20 @@ export default function NotificationsBell({ userId }: NotificationsBellProps) {
     setShowModal(false);
   };
 
-  if (unreadCount === 0 && !loading) return null;
-
   return (
     <>
       {/* زر الجرس العائم – مستوحى من InfTeleKarbala */}
-      <AnimatePresence>
-        <motion.button
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          onClick={() => {
-            if (unreadNotifications.length > 0) {
-              setShowModal(true);
-            }
-          }}
-          className="fixed bottom-6 left-6 z-[999] bg-slate-800 p-3 rounded-full shadow-2xl border-2 border-blue-500 hover:bg-slate-700 transition-colors group"
-          title="إشعارات الاجتماعات"
-        >
+      <AnimatePresence mode="wait">
+        {unreadCount > 0 && (
+          <motion.button
+            key="bell-button"
+            initial={{ scale: 0, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0, opacity: 0, y: 20 }}
+            onClick={() => setShowModal(true)}
+            className="fixed bottom-6 left-6 z-[999] bg-slate-800 p-3 rounded-full shadow-2xl border-2 border-blue-500 hover:bg-slate-700 transition-colors group"
+            title="إشعارات الاجتماعات"
+          >
           <div className="relative">
             <Bell className="text-white" size={22} />
             {unreadCount > 0 && (
@@ -188,6 +184,7 @@ export default function NotificationsBell({ userId }: NotificationsBellProps) {
           {/* حلقة نبضية – مثل InfTeleKarbala EmployeeNotifications */}
           <div className="absolute inset-0 rounded-full border-2 border-blue-500/50 animate-ping pointer-events-none" />
         </motion.button>
+        )}
       </AnimatePresence>
 
       {/* مودال الإشعارات */}
