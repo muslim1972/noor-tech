@@ -174,7 +174,7 @@ export default function NotificationsBell({ userId }: NotificationsBellProps) {
               setShowModal(true);
             }
           }}
-          className="fixed bottom-6 left-6 z-[100] bg-slate-800 p-3 rounded-full shadow-2xl border-2 border-blue-500 hover:bg-slate-700 transition-colors group"
+          className="fixed bottom-6 left-6 z-[999] bg-slate-800 p-3 rounded-full shadow-2xl border-2 border-blue-500 hover:bg-slate-700 transition-colors group"
           title="إشعارات الاجتماعات"
         >
           <div className="relative">

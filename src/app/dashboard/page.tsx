@@ -121,42 +121,42 @@ export default function DashboardPage() {
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
             onClick={() => setShowModal(true)}
             disabled={isStartingVideo}
-            className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-3xl shadow-xl shadow-blue-900/20 text-right flex flex-col justify-between h-48 border border-blue-500/30 overflow-hidden relative group"
+            className="bg-gradient-to-br from-blue-600 to-indigo-700 p-4 rounded-2xl shadow-xl shadow-blue-900/20 text-right flex flex-col justify-between h-32 border border-blue-500/30 overflow-hidden relative group"
           >
             <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="bg-white/10 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-md">
-              {isStartingVideo ? <LoaderIcon className="w-7 h-7 text-white animate-spin" /> : <Video className="w-7 h-7 text-white" />}
+            <div className="bg-white/10 w-10 h-10 rounded-xl flex items-center justify-center backdrop-blur-md">
+              {isStartingVideo ? <LoaderIcon className="w-5 h-5 text-white animate-spin" /> : <Video className="w-5 h-5 text-white" />}
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white mb-1">اجتماع فيديو خاص</h3>
-              <p className="text-blue-100 text-sm">حدد موظفين معينين لإرسال دعوة فورية</p>
+              <h3 className="text-lg font-bold text-white mb-0.5">اجتماع فيديو خاص</h3>
+              <p className="text-blue-100 text-xs opacity-80">حدد موظفين معينين لإرسال دعوة فورية</p>
             </div>
           </motion.button>
 
           <motion.button 
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
             onClick={() => alert('الغرفة الصوتية قيد التطوير')}
-            className="bg-slate-800 p-6 rounded-3xl border border-slate-700 text-right flex flex-col justify-between h-48 hover:bg-slate-800/80 transition-colors"
+            className="bg-slate-800 p-4 rounded-2xl border border-slate-700 text-right flex flex-col justify-between h-32 hover:bg-slate-800/80 transition-colors"
           >
-            <div className="bg-slate-700/50 w-14 h-14 rounded-2xl flex items-center justify-center text-slate-300">
-              <Mic className="w-7 h-7" />
+            <div className="bg-slate-700/50 w-10 h-10 rounded-xl flex items-center justify-center text-slate-300">
+              <Mic className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white mb-1">غرفة صوتية</h3>
-              <p className="text-slate-400 text-sm">مناقشة صوتية فقط بأسلوب Walkie-Talkie</p>
+              <h3 className="text-lg font-bold text-white mb-0.5">غرفة صوتية</h3>
+              <p className="text-slate-400 text-xs opacity-80">مناقشة صوتية فقط بأسلوب Walkie-Talkie</p>
             </div>
           </motion.button>
           
           <motion.div 
             whileHover={{ scale: 1.02 }}
-            className="bg-slate-800 p-6 rounded-3xl border border-slate-700 text-right flex flex-col justify-between h-48 opacity-50 cursor-not-allowed"
+            className="bg-slate-800 p-4 rounded-2xl border border-slate-700 text-right flex flex-col justify-between h-32 opacity-50 cursor-not-allowed"
           >
-            <div className="bg-slate-700/50 w-14 h-14 rounded-2xl flex items-center justify-center text-slate-300">
-              <Calendar className="w-7 h-7" />
+            <div className="bg-slate-700/50 w-10 h-10 rounded-xl flex items-center justify-center text-slate-300">
+              <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white mb-1">جدولة اجتماع</h3>
-              <p className="text-slate-400 text-sm">التكامل مع تقويم iOS / Android قريباً</p>
+              <h3 className="text-lg font-bold text-white mb-0.5">جدولة اجتماع</h3>
+              <p className="text-slate-400 text-xs opacity-80">التكامل مع تقويم iOS / Android قريباً</p>
             </div>
           </motion.div>
         </div>
